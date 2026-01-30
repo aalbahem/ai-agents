@@ -1,0 +1,22 @@
+[project]
+name = "procurement-assistant"
+version = "0.1.0"
+description = "AI-powered procurement data assistant using LangChain and Google Gemini"
+requires-python = ">=3.11"
+dependencies = [
+    "pymongo>=4.6",
+    "pandas>=2.1",
+    "langchain>=0.3",
+    "langchain-google-genai>=2.0",
+    "langchain-core>=0.3",
+    "streamlit>=1.39",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-timeout>=2.2"]
+observability = ["langsmith>=0.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["eval: Real LLM evaluation tests (slow, costs money). Run with: pytest -m eval"]
