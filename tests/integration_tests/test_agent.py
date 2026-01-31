@@ -33,7 +33,7 @@ def _final_response(text):
 @pytest.mark.parametrize(
     "case",
     EVAL_CASES,
-    ids=[c["question"][:50] for c in EVAL_CASES],
+    ids=[c["id"] for c in EVAL_CASES],
 )
 def test_tool_dispatch(case, mongo_collection):
     """Mock LLM returns the tool call from evaluation.json, verify execution."""

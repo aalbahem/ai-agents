@@ -23,14 +23,23 @@ EVAL_CASES = json.loads(EVAL_FILE.read_text())
 DATASET_NAME = "procurement-assistant-eval"
 
 
-def _build_langsmith_examples():
-    """Convert evaluation.json into LangSmith dataset format."""
+def _build_langsmith_examples(tags=None):
+    """Convert evaluation.json into LangSmith dataset format.
+
+    Args:
+        tags: Optional list of tags to filter cases by. A case is included
+              if it has at least one matching tag. None means include all.
+    """
+    cases = EVAL_CASES
+    if tags:
+        cases = [c for c in cases if set(tags) & set(c.get("tags", []))]
     return [
         {
             "inputs": {"question": case["question"]},
             "outputs": {"expected_values": case["expected_values"]},
+            "metadata": {"id": case["id"], "tags": case["tags"]},
         }
-        for case in EVAL_CASES
+        for case in cases
         if case["expected_values"]  # skip cases with no expected values
     ]
 
