@@ -35,11 +35,14 @@ scripts/
 └── load_data.py           # CSV → MongoDB data loader with type conversions and indexes
 
 tests/
-├── conftest.py            # Shared fixtures (MongoDB connection, mock LLM factory)
-├── test_unit_parse_dates.py    # Unit tests for date parsing
-├── test_unit_serialize.py      # Unit tests for BSON serialization
-├── test_integration_agent.py   # Mocked LLM + real MongoDB
-└── test_eval_agent.py          # Real LLM + real MongoDB via LangSmith evaluate()
+├── conftest.py                    # Shared fixtures (MongoDB connection, mock LLM factory)
+├── unit_tests/
+│   ├── test_parse_dates.py        # Date parsing logic
+│   └── test_serialize.py          # BSON serialization
+├── integration_tests/
+│   └── test_agent.py              # Mocked LLM + real MongoDB
+└── eval_tests/
+    └── test_agent.py              # Real LLM + real MongoDB via LangSmith evaluate()
 ```
 
 ## Setup
@@ -91,10 +94,10 @@ streamlit run app/streamlit_app.py
 ## Running Tests
 
 ```bash
-pytest tests/test_unit_*.py          # Unit tests only (no external deps)
-pytest tests/test_integration_*.py   # Integration tests (needs MongoDB)
+pytest tests/unit_tests/             # Unit tests only (no external deps)
+pytest tests/integration_tests/      # Integration tests (needs MongoDB)
 pytest -m "not eval"                 # Unit + integration (default CI mode)
-pytest -m eval                       # Evaluation tests (needs MongoDB + Gemini API key + LangSmith)
+pytest -m eval                       # Evaluation tests (needs MongoDB + Gemini + LangSmith)
 ```
 
 ## Tech Stack

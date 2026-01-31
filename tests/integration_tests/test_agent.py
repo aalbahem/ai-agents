@@ -9,7 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent import TOOLS, run_agent
-from tests.conftest import make_mock_llm
+from tests.helpers import make_mock_llm
 
 
 def _ai_with_tool_calls(tool_calls):

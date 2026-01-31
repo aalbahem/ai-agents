@@ -24,8 +24,8 @@ def _use_real_db(request, mongo_collection):
 
     Only applies to tests in test_integration_* and test_eval_* modules.
     """
-    module_name = request.module.__name__
-    if "integration" in module_name or "eval" in module_name:
+    module_path = str(request.fspath)
+    if "integration_tests" in module_path or "eval_tests" in module_path:
         set_collection(mongo_collection)
         yield
         set_collection(None)
@@ -33,28 +33,3 @@ def _use_real_db(request, mongo_collection):
         yield
 
 
-def make_mock_llm(responses):
-    """Create a mock LLM that returns predetermined responses in sequence.
-
-    Args:
-        responses: List of AIMessage objects to return on successive invoke() calls.
-
-    Returns:
-        A mock object with an invoke() method.
-    """
-
-    class _MockLLM:
-        def __init__(self, responses):
-            self._responses = list(responses)
-            self._call_count = 0
-
-        def invoke(self, messages):
-            idx = min(self._call_count, len(self._responses) - 1)
-            self._call_count += 1
-            return self._responses[idx]
-
-        @property
-        def call_count(self):
-            return self._call_count
-
-    return _MockLLM(responses)
