@@ -1,0 +1,53 @@
+[
+  {
+    "question": "How many orders were created in 2013?",
+    "expected_values": ["115309"],
+    "tool_calls": [
+      {
+        "name": "aggregate_mongodb",
+        "args": {
+          "pipeline": "[{\"$match\": {\"Creation Date\": {\"$gte\": \"2013-01-01T00:00:00\", \"$lt\": \"2014-01-01T00:00:00\"}}}, {\"$count\": \"total\"}]"
+        }
+      }
+    ]
+  },
+  {
+    "question": "What are the distinct fiscal years?",
+    "expected_values": ["2012-2013", "2013-2014", "2014-2015"],
+    "tool_calls": [
+      {
+        "name": "get_distinct_values",
+        "args": {
+          "field": "Fiscal Year"
+        }
+      }
+    ]
+  },
+  {
+    "question": "Top 5 most expensive orders?",
+    "expected_values": [],
+    "tool_calls": [
+      {
+        "name": "query_mongodb",
+        "args": {
+          "filter": "{}",
+          "projection": "{\"Supplier Name\": 1, \"Total Price\": 1, \"_id\": 0}",
+          "sort": "[[\"Total Price\", -1]]",
+          "limit": 5
+        }
+      }
+    ]
+  },
+  {
+    "question": "Top 5 suppliers by order count",
+    "expected_values": ["Voyager Fleet Systems"],
+    "tool_calls": [
+      {
+        "name": "aggregate_mongodb",
+        "args": {
+          "pipeline": "[{\"$group\": {\"_id\": \"$Supplier Name\", \"count\": {\"$sum\": 1}}}, {\"$sort\": {\"count\": -1}}, {\"$limit\": 5}]"
+        }
+      }
+    ]
+  }
+]

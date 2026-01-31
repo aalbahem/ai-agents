@@ -1,5 +1,6 @@
 """Level 3: Evaluation tests — Real LLM + Real MongoDB via LangSmith.
 
+Test cases are driven by tests/evaluation.json (shared with integration tests).
 Uses LangSmith's evaluate() to run the agent against a dataset,
 score each response with custom evaluators, and upload traces + scores
 to the LangSmith UI.
@@ -8,27 +9,30 @@ Marked with @pytest.mark.eval and excluded from default runs.
 Run with: pytest -m eval
 """
 
+import json
+import pathlib
+
 import pytest
 from langsmith import Client
 
 from app.agent import run_agent
 
+EVAL_FILE = pathlib.Path(__file__).resolve().parent.parent / "evaluation.json"
+EVAL_CASES = json.loads(EVAL_FILE.read_text())
+
 DATASET_NAME = "procurement-assistant-eval"
 
-EXAMPLES = [
-    {
-        "inputs": {"question": "How many orders were created in 2013?"},
-        "outputs": {"expected_values": ["115309"]},
-    },
-    {
-        "inputs": {"question": "What are the distinct fiscal years?"},
-        "outputs": {"expected_values": ["2012-2013", "2013-2014", "2014-2015"]},
-    },
-    {
-        "inputs": {"question": "Top 5 suppliers by order count"},
-        "outputs": {"expected_values": ["Voyager Fleet Systems"]},
-    },
-]
+
+def _build_langsmith_examples():
+    """Convert evaluation.json into LangSmith dataset format."""
+    return [
+        {
+            "inputs": {"question": case["question"]},
+            "outputs": {"expected_values": case["expected_values"]},
+        }
+        for case in EVAL_CASES
+        if case["expected_values"]  # skip cases with no expected values
+    ]
 
 
 # ── Target function ──────────────────────────────────────────────────
@@ -67,7 +71,8 @@ def pass_rate(outputs: list, reference_outputs: list) -> dict:
 # ── Helpers ──────────────────────────────────────────────────────────
 def _ensure_dataset(client: Client) -> None:
     """Create (or recreate) the eval dataset in LangSmith."""
-    # Delete existing dataset if present, so examples stay in sync
+    examples = _build_langsmith_examples()
+
     for ds in client.list_datasets(dataset_name=DATASET_NAME):
         client.delete_dataset(dataset_id=ds.id)
 
@@ -75,7 +80,7 @@ def _ensure_dataset(client: Client) -> None:
         dataset_name=DATASET_NAME,
         description="Procurement assistant end-to-end evaluation",
     )
-    client.create_examples(dataset_id=dataset.id, examples=EXAMPLES)
+    client.create_examples(dataset_id=dataset.id, examples=examples)
 
 
 # ── Test ─────────────────────────────────────────────────────────────

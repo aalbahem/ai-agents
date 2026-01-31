@@ -1,15 +1,22 @@
 """Level 2: Integration tests — Mocked LLM + Real MongoDB.
 
+Test cases are driven by tests/evaluation.json (shared with eval tests).
+Structural tests (no-tool, multi-tool) remain standalone.
+
 Requires MongoDB running with procurement data loaded.
 """
 
 import json
+import pathlib
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 
-from app.agent import TOOLS, run_agent
+from app.agent import run_agent
 from tests.helpers import make_mock_llm
+
+EVAL_FILE = pathlib.Path(__file__).resolve().parent.parent / "evaluation.json"
+EVAL_CASES = json.loads(EVAL_FILE.read_text())
 
 
 def _ai_with_tool_calls(tool_calls):
@@ -22,83 +29,29 @@ def _final_response(text):
     return AIMessage(content=text)
 
 
-class TestAggregateDispatch:
-    def test_count_2013_orders(self, mongo_collection):
-        """Mock LLM returns aggregate tool call with count pipeline for 2013.
-        Verify tool executes against real DB and returns correct count.
-        """
-        pipeline = json.dumps([
-            {
-                "$match": {
-                    "Creation Date": {
-                        "$gte": "2013-01-01T00:00:00",
-                        "$lt": "2014-01-01T00:00:00",
-                    }
-                }
-            },
-            {"$count": "total"},
-        ])
-        tool_call_response = _ai_with_tool_calls([
-            {
-                "id": "call_1",
-                "name": "aggregate_mongodb",
-                "args": {"pipeline": pipeline},
-            }
-        ])
-        final = _final_response("There were 115,309 orders in 2013.")
+# ── Data-driven tests from evaluation.json ───────────────────────────
+@pytest.mark.parametrize(
+    "case",
+    EVAL_CASES,
+    ids=[c["question"][:50] for c in EVAL_CASES],
+)
+def test_tool_dispatch(case, mongo_collection):
+    """Mock LLM returns the tool call from evaluation.json, verify execution."""
+    tool_calls = [
+        {"id": f"call_{i}", "name": tc["name"], "args": tc["args"]}
+        for i, tc in enumerate(case["tool_calls"])
+    ]
+    tool_call_response = _ai_with_tool_calls(tool_calls)
+    final = _final_response("Done.")
 
-        mock_llm = make_mock_llm([tool_call_response, final])
-        result = run_agent("How many orders in 2013?", [], llm=mock_llm)
+    mock_llm = make_mock_llm([tool_call_response, final])
+    result = run_agent(case["question"], [], llm=mock_llm)
 
-        assert result == "There were 115,309 orders in 2013."
-        assert mock_llm.call_count == 2
+    assert result == "Done."
+    assert mock_llm.call_count == 2
 
 
-class TestDistinctDispatch:
-    def test_distinct_fiscal_years(self, mongo_collection):
-        """Mock LLM returns get_distinct_values tool call for Fiscal Year."""
-        tool_call_response = _ai_with_tool_calls([
-            {
-                "id": "call_1",
-                "name": "get_distinct_values",
-                "args": {"field": "Fiscal Year"},
-            }
-        ])
-        final = _final_response("The fiscal years are 2012-2013, 2013-2014, 2014-2015.")
-
-        mock_llm = make_mock_llm([tool_call_response, final])
-        result = run_agent("What fiscal years exist?", [], llm=mock_llm)
-
-        assert result == "The fiscal years are 2012-2013, 2013-2014, 2014-2015."
-        assert mock_llm.call_count == 2
-
-
-class TestFindDispatchWithSort:
-    def test_top_5_by_total_price(self, mongo_collection):
-        """Mock LLM returns query_mongodb with sort by Total Price desc, limit 5."""
-        tool_call_response = _ai_with_tool_calls([
-            {
-                "id": "call_1",
-                "name": "query_mongodb",
-                "args": {
-                    "filter": "{}",
-                    "projection": json.dumps(
-                        {"Supplier Name": 1, "Total Price": 1, "_id": 0}
-                    ),
-                    "sort": json.dumps([["Total Price", -1]]),
-                    "limit": 5,
-                },
-            }
-        ])
-        final = _final_response("Here are the top 5 orders by total price.")
-
-        mock_llm = make_mock_llm([tool_call_response, final])
-        result = run_agent("Top 5 most expensive orders?", [], llm=mock_llm)
-
-        assert result == "Here are the top 5 orders by total price."
-        assert mock_llm.call_count == 2
-
-
+# ── Structural tests (not in evaluation.json) ────────────────────────
 class TestMultipleToolCalls:
     def test_two_tool_calls_in_one_response(self, mongo_collection):
         """Mock LLM returns AIMessage with 2 tool_calls.
