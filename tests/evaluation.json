@@ -57,5 +57,21 @@
         }
       }
     ]
+  },
+  {
+    "id": "health-dept-semantic",
+    "tags": ["semantic-search", "aggregation", "count"],
+    "_comment": "Semantic search test: user says 'Health Department' but the DB value is 'Health Care Services, Department of'. Tests that fuzzy/informal names resolve to exact DB values via vector search.",
+    "question": "How many orders from the Health Department?",
+    "expected_values": ["Health Care Services"],
+    "tool_calls": [
+      {
+        "name": "find_similar_values",
+        "args": {
+          "query": "Health Department",
+          "field_name": "Department Name"
+        }
+      }
+    ]
   }
 ]

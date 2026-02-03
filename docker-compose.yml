@@ -7,5 +7,15 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  typesense:
+    image: typesense/typesense:27.1
+    container_name: procurement-typesense
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense_data:/data
+    command: "--data-dir /data --api-key=xyz --enable-cors"
+
 volumes:
   mongo_data:
+  typesense_data:
