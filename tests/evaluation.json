@@ -73,5 +73,53 @@
         }
       }
     ]
+  },
+  {
+    "id": "supplier-fuzzy-partial",
+    "tags": ["fuzzy-search", "supplier"],
+    "_comment": "Fuzzy search: partial supplier name 'Pitney' should resolve to 'Pitney Bowes' via typo-tolerant text match.",
+    "question": "How much did Pitney spend in total?",
+    "expected_values": ["Pitney Bowes"],
+    "tool_calls": [
+      {
+        "name": "find_supplier",
+        "args": {
+          "query": "Pitney",
+          "field_name": "Supplier Name"
+        }
+      }
+    ]
+  },
+  {
+    "id": "supplier-fuzzy-typo",
+    "tags": ["fuzzy-search", "supplier"],
+    "_comment": "Fuzzy search: misspelled supplier name should still resolve via typo tolerance.",
+    "question": "Show orders from Delat Dental",
+    "expected_values": ["Delta Dental"],
+    "tool_calls": [
+      {
+        "name": "find_supplier",
+        "args": {
+          "query": "Delat Dental",
+          "field_name": "Supplier Name"
+        }
+      }
+    ]
+  },
+  {
+    "id": "supplier-fuzzy-zip",
+    "tags": ["fuzzy-search", "supplier"],
+    "_comment": "Fuzzy search by supplier zip code.",
+    "question": "Which suppliers are in zip code 95841?",
+    "expected_values": ["95841"],
+    "tool_calls": [
+      {
+        "name": "find_supplier",
+        "args": {
+          "query": "95841",
+          "field_name": "Supplier Zip Code"
+        }
+      }
+    ]
   }
 ]
