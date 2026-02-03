@@ -38,6 +38,21 @@ with st.sidebar:
         if st.button(example, use_container_width=True, key=f"sem_{example}"):
             st.session_state["pending_query"] = example
 
+    st.divider()
+    st.header("Fuzzy Supplier Search")
+    st.caption(
+        "These use partial or misspelled supplier names resolved via "
+        "typo-tolerant text search (e.g. 'Pitney' \u2192 'Pitney Bowes')."
+    )
+    fuzzy_examples = [
+        "How much did Pitney spend in total?",
+        "Show orders from Delat Dental",
+        "Which suppliers are in zip code 95841?",
+    ]
+    for example in fuzzy_examples:
+        if st.button(example, use_container_width=True, key=f"fuz_{example}"):
+            st.session_state["pending_query"] = example
+
 # --- Chat state ---
 if "messages" not in st.session_state:
     st.session_state.messages = []

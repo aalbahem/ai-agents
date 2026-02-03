@@ -1,8 +1,8 @@
-"""Level 1: Unit tests for app/search.py — embedding and vector search."""
+"""Level 1: Unit tests for app/search.py — embedding, vector, and fuzzy search."""
 
 from unittest.mock import MagicMock, patch
 
-from app.search import embed_text, search_similar_values
+from app.search import embed_text, search_fuzzy, search_similar_values
 
 
 class TestEmbedText:
@@ -92,5 +92,79 @@ class TestSearchSimilarValues:
         mock_client_fn.return_value = _mock_multi_search([])
 
         results = search_similar_values("nonexistent", "Department Name")
+
+        assert results == []
+
+
+def _mock_text_search(hits):
+    """Create a mock Typesense client whose collection search returns *hits*."""
+    mock_client = MagicMock()
+    mock_collection = MagicMock()
+    mock_collection.documents.search.return_value = {"hits": hits}
+    mock_client.collections.__getitem__.return_value = mock_collection
+    return mock_client
+
+
+class TestSearchFuzzy:
+    @patch("app.search.get_typesense_client")
+    def test_returns_matches_with_value_and_score(self, mock_client_fn):
+        mock_client_fn.return_value = _mock_text_search([
+            {
+                "document": {
+                    "field_name": "Supplier Name",
+                    "value": "Pitney Bowes",
+                },
+                "text_match_info": {"score": 1234},
+            },
+            {
+                "document": {
+                    "field_name": "Supplier Name",
+                    "value": "Pitney Bowes Inc.",
+                },
+                "text_match_info": {"score": 1100},
+            },
+        ])
+
+        results = search_fuzzy("Pitney", "Supplier Name", limit=2)
+
+        assert len(results) == 2
+        assert results[0]["value"] == "Pitney Bowes"
+        assert results[0]["score"] == 1234
+
+    @patch("app.search.get_typesense_client")
+    def test_passes_typo_tolerance_params(self, mock_client_fn):
+        mock_client_fn.return_value = _mock_text_search([])
+
+        search_fuzzy("Delat Denta", "Supplier Name")
+
+        search_call = (
+            mock_client_fn.return_value
+            .collections.__getitem__.return_value
+            .documents.search
+        )
+        search_args = search_call.call_args[0][0]
+        assert search_args["num_typos"] == 2
+        assert search_args["prefix"] == "true"
+        assert search_args["query_by"] == "value"
+
+    @patch("app.search.get_typesense_client")
+    def test_filters_by_field_name(self, mock_client_fn):
+        mock_client_fn.return_value = _mock_text_search([])
+
+        search_fuzzy("95841", "Supplier Zip Code")
+
+        search_call = (
+            mock_client_fn.return_value
+            .collections.__getitem__.return_value
+            .documents.search
+        )
+        search_args = search_call.call_args[0][0]
+        assert search_args["filter_by"] == "field_name:=Supplier Zip Code"
+
+    @patch("app.search.get_typesense_client")
+    def test_empty_results(self, mock_client_fn):
+        mock_client_fn.return_value = _mock_text_search([])
+
+        results = search_fuzzy("nonexistent", "Supplier Name")
 
         assert results == []

@@ -33,13 +33,17 @@ def _final_response(text):
 # ── Data-driven tests from evaluation.json ───────────────────────────
 
 # Cases that hit Typesense need the search backend mocked.
-_SEARCH_MOCK_RETURN = [
+_SEMANTIC_MOCK_RETURN = [
     {"value": "Health Care Services, Department of", "score": 0.12},
 ]
 
+_FUZZY_MOCK_RETURN = [
+    {"value": "Pitney Bowes", "score": 1234},
+]
 
-def _needs_search_mock(case):
-    return any(tc["name"] == "find_similar_values" for tc in case["tool_calls"])
+
+def _tool_names(case):
+    return {tc["name"] for tc in case["tool_calls"]}
 
 
 @pytest.mark.parametrize(
@@ -57,12 +61,20 @@ def test_tool_dispatch(case, mongo_collection):
     final = _final_response("Done.")
 
     mock_llm = make_mock_llm([tool_call_response, final])
+    names = _tool_names(case)
 
-    if _needs_search_mock(case):
-        with patch(
-            "app.agent.search_similar_values",
-            return_value=_SEARCH_MOCK_RETURN,
-        ):
+    patches = {}
+    if "find_similar_values" in names:
+        patches["app.agent.search_similar_values"] = _SEMANTIC_MOCK_RETURN
+    if "find_supplier" in names:
+        patches["app.agent.search_fuzzy"] = _FUZZY_MOCK_RETURN
+
+    if patches:
+        from contextlib import ExitStack
+
+        with ExitStack() as stack:
+            for target, rv in patches.items():
+                stack.enter_context(patch(target, return_value=rv))
             result = run_agent(case["question"], [], llm=mock_llm)
     else:
         result = run_agent(case["question"], [], llm=mock_llm)
@@ -201,3 +213,100 @@ class TestFindSimilarValues:
 
         assert result == "Found 42 orders."
         assert mock_llm.call_count == 3
+
+
+class TestFindSupplier:
+    """Integration tests for the find_supplier tool.
+
+    These test fuzzy text search for supplier fields — partial names,
+    typos, and zip codes resolved via Typesense typo-tolerant matching.
+
+    Mocks the search backend but exercises the full agent tool-dispatch path.
+    """
+
+    @patch("app.agent.search_fuzzy")
+    def test_partial_supplier_name(self, mock_fuzzy):
+        """Partial name 'Pitney' resolves to 'Pitney Bowes'."""
+        mock_fuzzy.return_value = [
+            {"value": "Pitney Bowes", "score": 1234},
+        ]
+
+        tool_call_response = _ai_with_tool_calls([
+            {
+                "id": "call_0",
+                "name": "find_supplier",
+                "args": {
+                    "query": "Pitney",
+                    "field_name": "Supplier Name",
+                },
+            },
+        ])
+        final = _final_response("The closest match is Pitney Bowes.")
+
+        mock_llm = make_mock_llm([tool_call_response, final])
+        result = run_agent("How much did Pitney spend?", [], llm=mock_llm)
+
+        assert result == "The closest match is Pitney Bowes."
+        mock_fuzzy.assert_called_once_with("Pitney", "Supplier Name", 5)
+
+    @patch("app.agent.search_fuzzy")
+    def test_supplier_then_mongodb_query(self, mock_fuzzy, mongo_collection):
+        """Two-step: resolve supplier name, then query MongoDB."""
+        mock_fuzzy.return_value = [
+            {"value": "Pitney Bowes", "score": 1234},
+        ]
+
+        search_call = _ai_with_tool_calls([
+            {
+                "id": "call_0",
+                "name": "find_supplier",
+                "args": {
+                    "query": "Pitney",
+                    "field_name": "Supplier Name",
+                },
+            },
+        ])
+        mongo_call = _ai_with_tool_calls([
+            {
+                "id": "call_1",
+                "name": "aggregate_mongodb",
+                "args": {
+                    "pipeline": json.dumps([
+                        {"$match": {"Supplier Name": "Pitney Bowes"}},
+                        {"$group": {"_id": None, "total": {"$sum": "$Total Price"}}},
+                    ])
+                },
+            },
+        ])
+        final = _final_response("Pitney Bowes spent $123,456.")
+
+        mock_llm = make_mock_llm([search_call, mongo_call, final])
+        result = run_agent("How much did Pitney spend?", [], llm=mock_llm)
+
+        assert result == "Pitney Bowes spent $123,456."
+        assert mock_llm.call_count == 3
+
+    @patch("app.agent.search_fuzzy")
+    def test_supplier_zip_code(self, mock_fuzzy):
+        """Zip code lookup dispatches find_supplier with Supplier Zip Code."""
+        mock_fuzzy.return_value = [
+            {"value": "95841", "score": 999},
+        ]
+
+        tool_call_response = _ai_with_tool_calls([
+            {
+                "id": "call_0",
+                "name": "find_supplier",
+                "args": {
+                    "query": "95841",
+                    "field_name": "Supplier Zip Code",
+                },
+            },
+        ])
+        final = _final_response("Found suppliers in 95841.")
+
+        mock_llm = make_mock_llm([tool_call_response, final])
+        result = run_agent("Which suppliers are in zip 95841?", [], llm=mock_llm)
+
+        assert result == "Found suppliers in 95841."
+        mock_fuzzy.assert_called_once_with("95841", "Supplier Zip Code", 5)

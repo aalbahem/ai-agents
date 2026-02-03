@@ -15,7 +15,7 @@ from app.config import (
     GOOGLE_API_KEY,
 )
 from app.db import run_aggregate, run_distinct, run_find
-from app.search import search_similar_values
+from app.search import search_fuzzy, search_similar_values
 
 SYSTEM_PROMPT = """You are a procurement data analyst assistant. You answer questions about California state government purchase order data (2012–2015) stored in a MongoDB collection called `procurement.purchases`.
 
@@ -64,7 +64,8 @@ Each document has these fields:
 - Prices (Unit Price, Total Price) are floats, NOT strings. Query them numerically.
 - Fiscal Year is a string like "2013-2014".
 - For text matching, use exact match or `{"$regex": "pattern", "$options": "i"}` for case-insensitive.
-- When a user refers to a department, supplier, or item by name, first try querying MongoDB directly. If the query returns zero results, the name was probably informal or abbreviated — use `find_similar_values` to resolve it to the exact database value, then re-query.
+- When a user refers to a department or item by name, first try querying MongoDB directly. If the query returns zero results, the name was probably informal or abbreviated — use `find_similar_values` to resolve it to the exact database value, then re-query.
+- When a user refers to a supplier by name, code, or zip code, use `find_supplier` to resolve it. This uses typo-tolerant text matching suited for proper nouns (e.g. "Pitney" → "Pitney Bowes").
 - When `find_similar_values` returns multiple matches, present them as a **numbered list** to the user and ask which one they meant. Do NOT dump raw JSON. Format like:
   "I found several possible matches for 'Health Department':
    1. Health Care Services, Department of
@@ -220,7 +221,31 @@ def find_similar_values(query: str, field_name: str, limit: int = 5) -> str:
     return json.dumps(results)
 
 
-TOOLS = [query_mongodb, aggregate_mongodb, get_distinct_values, find_similar_values]
+@tool
+def find_supplier(query: str, field_name: str = "Supplier Name", limit: int = 5) -> str:
+    """Find suppliers by name, code, or zip code using typo-tolerant text search.
+
+    Use this when the user refers to a supplier by a partial, abbreviated, or
+    misspelled name. Unlike find_similar_values (which uses meaning-based
+    search), this uses fuzzy text matching suited for proper nouns.
+
+    Args:
+        query: The user's term, e.g. "Pitney", "Delta Dental", "95841".
+        field_name: The supplier field to search: "Supplier Name",
+                    "Supplier Code", or "Supplier Zip Code".
+        limit: Maximum number of matches to return (default 5).
+
+    Returns:
+        JSON string of matches, each with "value" and "score" keys.
+        Higher score means a closer match.
+        Present the matches as a numbered list to the user and ask them
+        to pick one — do NOT show raw JSON to the user.
+    """
+    results = search_fuzzy(query, field_name, limit)
+    return json.dumps(results)
+
+
+TOOLS = [query_mongodb, aggregate_mongodb, get_distinct_values, find_similar_values, find_supplier]
 
 
 def build_agent():

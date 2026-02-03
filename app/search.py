@@ -1,5 +1,10 @@
 
-"""Typesense vector search for resolving user intent to exact field values."""
+"""Typesense search for resolving user intent to exact field values.
+
+Two strategies:
+- Vector/semantic search for categorical fields (Department Name, etc.)
+- Text/fuzzy search for proper nouns (Supplier Name, Supplier Code, etc.)
+"""
 
 from app.config import (
     TYPESENSE_API_KEY,
@@ -89,4 +94,42 @@ def search_similar_values(
             "score": hit["vector_distance"],
         }
         for hit in results["results"][0]["hits"]
+    ]
+
+
+def search_fuzzy(
+    query: str,
+    field_name: str,
+    limit: int = 5,
+) -> list[dict]:
+    """Typo-tolerant text search for proper noun fields (suppliers, codes).
+
+    Uses Typesense's built-in fuzzy matching with prefix support.
+    No embeddings needed — matches on string similarity.
+
+    Args:
+        query: The user's term, e.g. "Pitney" or "Delta Dental".
+        field_name: Which field to search within (e.g. "Supplier Name").
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of dicts with ``value`` and ``score`` keys.
+    """
+    client = get_typesense_client()
+
+    results = client.collections[TYPESENSE_COLLECTION].documents.search({
+        "q": query,
+        "query_by": "value",
+        "filter_by": f"field_name:={field_name}",
+        "per_page": limit,
+        "num_typos": 2,
+        "prefix": "true",
+    })
+
+    return [
+        {
+            "value": hit["document"]["value"],
+            "score": hit["text_match_info"]["score"],
+        }
+        for hit in results["hits"]
     ]
