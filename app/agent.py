@@ -8,8 +8,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.config import GEMINI_MODEL, GEMINI_TEMPERATURE, GOOGLE_API_KEY
+from app.config import (
+    GEMINI_FALLBACK_MODELS,
+    GEMINI_MODEL,
+    GEMINI_TEMPERATURE,
+    GOOGLE_API_KEY,
+)
 from app.db import run_aggregate, run_distinct, run_find
+from app.search import search_similar_values
 
 SYSTEM_PROMPT = """You are a procurement data analyst assistant. You answer questions about California state government purchase order data (2012–2015) stored in a MongoDB collection called `procurement.purchases`.
 
@@ -58,6 +64,15 @@ Each document has these fields:
 - Prices (Unit Price, Total Price) are floats, NOT strings. Query them numerically.
 - Fiscal Year is a string like "2013-2014".
 - For text matching, use exact match or `{"$regex": "pattern", "$options": "i"}` for case-insensitive.
+- When a user refers to a department, supplier, or item by name, first try querying MongoDB directly. If the query returns zero results, the name was probably informal or abbreviated — use `find_similar_values` to resolve it to the exact database value, then re-query.
+- When `find_similar_values` returns multiple matches, present them as a **numbered list** to the user and ask which one they meant. Do NOT dump raw JSON. Format like:
+  "I found several possible matches for 'Health Department':
+   1. Health Care Services, Department of
+   2. Public Health, Department of
+   3. Mental Health, Department of
+   Which one did you mean?"
+  Once the user picks one, use that exact value in your MongoDB query.
+- If `find_similar_values` returns exactly one match with a very low score (< 0.3), you may use it directly without asking.
 - For "top N" or "highest/lowest" questions, use aggregation with $group, $sort, $limit.
 - For counting, use aggregation with $group and $count, or $match followed by $count.
 - For sums/averages, use $group with $sum/$avg on numeric fields.
@@ -80,6 +95,27 @@ Each document has these fields:
 ```
 
 Always use the tools to query the database. Do not make up data. Present results clearly, with formatting (tables, lists) where appropriate."""
+
+
+def _extract_text(content: Any) -> str:
+    """Extract plain text from an LLM response content field.
+
+    LangChain model responses may return content as a plain string or as a list
+    of content blocks (e.g. [{"type": "text", "text": "...", "extras": {...}}]).
+    This normalises both forms to a plain string suitable for display and for
+    feeding back into conversation history.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block["text"])
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    return str(content)
 
 
 def _parse_dates(obj: Any) -> Any:
@@ -159,18 +195,52 @@ def get_distinct_values(field: str) -> str:
     return run_distinct(field)
 
 
-TOOLS = [query_mongodb, aggregate_mongodb, get_distinct_values]
+@tool
+def find_similar_values(query: str, field_name: str, limit: int = 5) -> str:
+    """Find database values that semantically match a user's natural-language term.
+
+    Use this when the user refers to a department, supplier, item, or other
+    categorical field by an informal or abbreviated name. It returns the closest
+    exact values stored in the database so you can build accurate MongoDB queries.
+
+    Args:
+        query: The user's term, e.g. "Health Department" or "Dell".
+        field_name: The collection field to search within, e.g. "Department Name",
+                    "Supplier Name", "Item Name", "Acquisition Type",
+                    "Acquisition Method".
+        limit: Maximum number of matches to return (default 5).
+
+    Returns:
+        JSON string of matches, each with "value" and "score" keys.
+        Lower score means a closer match.
+        Present the matches as a numbered list to the user and ask them
+        to pick one — do NOT show raw JSON to the user.
+    """
+    results = search_similar_values(query, field_name, limit)
+    return json.dumps(results)
+
+
+TOOLS = [query_mongodb, aggregate_mongodb, get_distinct_values, find_similar_values]
 
 
 def build_agent():
     """Build and return a LangChain tool-calling agent."""
-    llm = ChatGoogleGenerativeAI(
+    primary = ChatGoogleGenerativeAI(
         model=GEMINI_MODEL,
         temperature=GEMINI_TEMPERATURE,
         google_api_key=GOOGLE_API_KEY,
     )
-    llm_with_tools = llm.bind_tools(TOOLS)
-    return llm_with_tools
+    fallbacks = [
+        ChatGoogleGenerativeAI(
+            model=model,
+            temperature=GEMINI_TEMPERATURE,
+            google_api_key=GOOGLE_API_KEY,
+        )
+        for model in GEMINI_FALLBACK_MODELS
+        if model != GEMINI_MODEL
+    ]
+    llm = primary.with_fallbacks(fallbacks) if fallbacks else primary
+    return llm.bind_tools(TOOLS)
 
 
 def run_agent(user_input: str, history: list[dict], llm=None) -> str:
@@ -199,20 +269,25 @@ def run_agent(user_input: str, history: list[dict], llm=None) -> str:
     # Agentic loop: call LLM, invoke tools, repeat until no more tool calls
     for _ in range(10):  # max iterations to prevent infinite loops
         response = llm.invoke(messages)
-        messages.append(response)
 
         if not response.tool_calls:
-            return response.content
+            return _extract_text(response.content)
+
+        # Keep the full response object in messages for LangChain's
+        # tool-call tracking, but replace content with plain text so
+        # later turns don't re-send model metadata (signatures, etc.).
+        response.content = _extract_text(response.content)
+        messages.append(response)
 
         # Execute each tool call and append results
+        from langchain_core.messages import ToolMessage
+
         for tc in response.tool_calls:
             tool_fn = tools_by_name[tc["name"]]
             result = tool_fn.invoke(tc["args"])
-            from langchain_core.messages import ToolMessage
-
             messages.append(
                 ToolMessage(content=str(result), tool_call_id=tc["id"])
             )
 
     # If we exhausted iterations, return whatever we have
-    return response.content
+    return _extract_text(response.content)

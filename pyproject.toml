@@ -11,6 +11,8 @@ dependencies = [
     "langchain-core>=0.3",
     "streamlit>=1.39",
     "python-dotenv>=1.0",
+    "typesense>=0.21",
+    "sentence-transformers>=3.0",
 ]
 
 [project.optional-dependencies]

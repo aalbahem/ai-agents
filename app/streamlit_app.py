@@ -10,19 +10,32 @@ st.caption("Ask questions about California state purchase order data (2012–201
 
 # --- Sidebar with example queries ---
 with st.sidebar:
-    st.header("Example Queries")
-    examples = [
+    st.header("Exact Match")
+    st.caption("These use exact field values — no semantic resolution needed.")
+    exact_examples = [
         "How many orders were created in 2013?",
-        "Which quarter had the highest total spending?",
-        "What are the top 10 most frequently ordered items?",
         "Show me the total spending by department for fiscal year 2014-2015",
+        "What are the top 10 most frequently ordered items?",
         "Which suppliers have the most orders?",
-        "What is the average order value by acquisition type?",
-        "How many orders used CalCard?",
         "What are the distinct fiscal years in the dataset?",
     ]
-    for example in examples:
+    for example in exact_examples:
         if st.button(example, use_container_width=True):
+            st.session_state["pending_query"] = example
+
+    st.divider()
+    st.header("Semantic Search")
+    st.caption(
+        "These use informal names the agent must resolve to exact DB values "
+        "via vector search (e.g. 'Health Department' → 'Health Care Services, Department of')."
+    )
+    semantic_examples = [
+        "How many orders from the Health Department?",
+        "Total spending by the DMV last year?",
+        "What did Corrections buy the most?",
+    ]
+    for example in semantic_examples:
+        if st.button(example, use_container_width=True, key=f"sem_{example}"):
             st.session_state["pending_query"] = example
 
 # --- Chat state ---

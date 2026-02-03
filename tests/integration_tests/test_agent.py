@@ -8,6 +8,7 @@ Requires MongoDB running with procurement data loaded.
 
 import json
 import pathlib
+from unittest.mock import patch
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -30,6 +31,17 @@ def _final_response(text):
 
 
 # ── Data-driven tests from evaluation.json ───────────────────────────
+
+# Cases that hit Typesense need the search backend mocked.
+_SEARCH_MOCK_RETURN = [
+    {"value": "Health Care Services, Department of", "score": 0.12},
+]
+
+
+def _needs_search_mock(case):
+    return any(tc["name"] == "find_similar_values" for tc in case["tool_calls"])
+
+
 @pytest.mark.parametrize(
     "case",
     EVAL_CASES,
@@ -45,7 +57,15 @@ def test_tool_dispatch(case, mongo_collection):
     final = _final_response("Done.")
 
     mock_llm = make_mock_llm([tool_call_response, final])
-    result = run_agent(case["question"], [], llm=mock_llm)
+
+    if _needs_search_mock(case):
+        with patch(
+            "app.agent.search_similar_values",
+            return_value=_SEARCH_MOCK_RETURN,
+        ):
+            result = run_agent(case["question"], [], llm=mock_llm)
+    else:
+        result = run_agent(case["question"], [], llm=mock_llm)
 
     assert result == "Done."
     assert mock_llm.call_count == 2
@@ -93,3 +113,91 @@ class TestNoToolCalls:
 
         assert result == "I can help with procurement data queries."
         assert mock_llm.call_count == 1
+
+
+class TestFindSimilarValues:
+    """Integration tests for the find_similar_values tool.
+
+    These test semantic search resolution — the user says an informal name
+    like "Health Department" and the tool resolves it to the exact DB value
+    "Health Care Services, Department of".  The wording gap (different words,
+    different order) is what makes this a semantic match, not an exact one.
+
+    Mocks the search backend (Typesense + embeddings) since it may not be
+    running, but exercises the full agent tool-dispatch path.
+    """
+
+    @patch("app.agent.search_similar_values")
+    def test_tool_dispatches_and_returns_results(self, mock_search):
+        """Verify the agent dispatches find_similar_values with the right args.
+
+        User says "Health Department" — not an exact match for any DB value.
+        The tool should resolve it to "Health Care Services, Department of".
+        """
+        mock_search.return_value = [
+            {"value": "Health Care Services, Department of", "score": 0.12},
+            {"value": "Public Health, Department of", "score": 0.25},
+        ]
+
+        tool_call_response = _ai_with_tool_calls([
+            {
+                "id": "call_0",
+                "name": "find_similar_values",
+                "args": {
+                    "query": "Health Department",
+                    "field_name": "Department Name",
+                },
+            },
+        ])
+        final = _final_response("The closest match is Health Care Services, Department of.")
+
+        mock_llm = make_mock_llm([tool_call_response, final])
+        result = run_agent("orders from Health Department", [], llm=mock_llm)
+
+        assert result == "The closest match is Health Care Services, Department of."
+        mock_search.assert_called_once_with(
+            "Health Department", "Department Name", 5
+        )
+
+    @patch("app.agent.search_similar_values")
+    def test_chained_with_mongodb_query(self, mock_search, mongo_collection):
+        """Full two-step flow: resolve informal name, then query MongoDB.
+
+        Turn 1 — LLM calls find_similar_values("Health Department")
+                  → returns "Health Care Services, Department of"
+        Turn 2 — LLM uses that exact value to query MongoDB
+        Turn 3 — LLM returns final answer
+        """
+        mock_search.return_value = [
+            {"value": "Health Care Services, Department of", "score": 0.1},
+        ]
+
+        search_call = _ai_with_tool_calls([
+            {
+                "id": "call_0",
+                "name": "find_similar_values",
+                "args": {
+                    "query": "Health Department",
+                    "field_name": "Department Name",
+                },
+            },
+        ])
+        mongo_call = _ai_with_tool_calls([
+            {
+                "id": "call_1",
+                "name": "aggregate_mongodb",
+                "args": {
+                    "pipeline": json.dumps([
+                        {"$match": {"Department Name": "Health Care Services, Department of"}},
+                        {"$count": "total"},
+                    ])
+                },
+            },
+        ])
+        final = _final_response("Found 42 orders.")
+
+        mock_llm = make_mock_llm([search_call, mongo_call, final])
+        result = run_agent("How many orders from Health Department?", [], llm=mock_llm)
+
+        assert result == "Found 42 orders."
+        assert mock_llm.call_count == 3
