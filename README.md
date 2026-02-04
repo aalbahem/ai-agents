@@ -91,23 +91,24 @@ The emphasis on testing structure is deliberate — LLM-powered agents are non-d
 flowchart TB
     User([User]) --> Streamlit
 
-    subgraph App["Application Layer"]
+    subgraph Apps["apps · UI Layer"]
         Streamlit["Streamlit Chat UI"]
+    end
+
+    subgraph Agents["agents · Orchestration Layer"]
         Streamlit --> Agent
         Agent["LangChain Agent<br/><i>agentic tool-calling loop</i>"]
     end
 
-    subgraph LLM["LLM Layer"]
-        Primary["Gemini Primary"]
-        Fallback1["Gemini Fallback 1"]
-        Fallback2["Gemini Fallback 2"]
-        Primary -. "rate limit / error" .-> Fallback1
-        Fallback1 -. "rate limit / error" .-> Fallback2
+    subgraph LLM["LLM Providers"]
+        Gemini["Gemini<br/><i>(with fallbacks)</i>"]
+        OpenAI["OpenAI"]
+        Ollama["Ollama"]
     end
 
-    Agent <--> Primary
+    Agent <--> Gemini & OpenAI & Ollama
 
-    subgraph Tools["Agent Tools"]
+    subgraph Tools["tools · Tool Layer"]
         direction LR
         query_mongodb["query_mongodb<br/><i>find()</i>"]
         aggregate_mongodb["aggregate_mongodb<br/><i>aggregation pipelines</i>"]
@@ -118,7 +119,7 @@ flowchart TB
 
     Agent --> Tools
 
-    subgraph Data["Data Layer"]
+    subgraph Clients["clients · Data Access Layer"]
         MongoDB[(MongoDB)]
         Typesense[(Typesense)]
     end
@@ -137,12 +138,19 @@ flowchart TB
 ### Project structure
 
 ```
-app/
-├── config.py              # Environment configuration (dotenv)
-├── db.py                  # MongoDB connection, find/aggregate/distinct helpers
-├── search.py              # Typesense search: vector (semantic) + text (fuzzy)
-├── agent.py               # LangChain agent, tools, agentic loop, LLM fallbacks
-└── streamlit_app.py       # Chat UI
+src/
+├── common/
+│   └── config.py          # Environment configuration (dotenv)
+├── clients/
+│   ├── mongodb.py         # MongoDB connection, find/aggregate/distinct helpers
+│   └── typesense.py       # Typesense search: vector (semantic) + text (fuzzy)
+├── tools/
+│   └── procurement.py     # LangChain @tool functions (query, aggregate, search)
+├── agents/
+│   └── procurement.py     # Agent orchestration, prompts, LLM builders, agentic loop
+├── api/                   # FastAPI (placeholder)
+└── apps/
+    └── streamlit_app.py   # Chat UI
 
 scripts/
 ├── load_data.py           # CSV → MongoDB loader with type conversions and indexes
@@ -156,6 +164,8 @@ tests/
 ├── integration_tests/             # Mocked LLM + real MongoDB
 └── eval_tests/                    # Real LLM + real MongoDB via LangSmith
 ```
+
+Dependency flow (downward only): `apps` → `agents/api` → `tools` → `clients` → `common`
 
 ## Setup
 
@@ -201,7 +211,7 @@ python scripts/index_typesense.py
 ### 5. Run the assistant
 
 ```bash
-streamlit run app/streamlit_app.py
+streamlit run src/apps/streamlit_app.py
 ```
 
 ## Running Tests
