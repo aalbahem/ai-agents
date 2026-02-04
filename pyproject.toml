@@ -27,6 +27,28 @@ observability = ["langsmith>=0.1"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pylint.main]
+init-hook = "import sys; sys.path.insert(0, 'src')"
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-function-docstring",  # test methods are self-documenting via names
+    "missing-class-docstring",     # test classes are self-documenting via names
+    "too-few-public-methods",      # test classes often have 1 method
+    "import-outside-toplevel",     # lazy imports are intentional (heavy deps)
+    "global-statement",            # singleton pattern for DB/search clients
+    "invalid-name",                # _client, _embedding_model are fine
+    "redefined-outer-name",        # pytest fixtures redefine by design
+    "unused-argument",             # pytest fixtures appear unused
+    "redefined-builtin",           # filter param in query_mongodb matches MongoDB API
+    "no-else-return",              # elif after return is clearer in _parse_dates
+    "broad-exception-caught",      # intentional in idempotent teardown
+    "trailing-newlines",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
 [tool.pytest.ini_options]
 testpaths = ["tests/unit_tests", "tests/integration_tests", "tests/eval_tests"]
 markers = ["eval: Real LLM evaluation tests (slow, costs money). Run with: pytest -m eval"]

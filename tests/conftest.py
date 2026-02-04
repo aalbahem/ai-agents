@@ -1,7 +1,5 @@
 """Shared fixtures for procurement assistant tests."""
 
-import os
-
 import pytest
 from pymongo import MongoClient
 

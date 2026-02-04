@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long
 """LangChain agent with MongoDB tools powered by Google Gemini."""
 
 from typing import Any

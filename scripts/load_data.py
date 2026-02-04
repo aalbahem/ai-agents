@@ -8,7 +8,10 @@ from pymongo import MongoClient
 MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "procurement"
 COLLECTION_NAME = "purchases"
-CSV_PATH = pathlib.Path(__file__).resolve().parent.parent / "data" / "lpca" / "PURCHASE ORDER DATA EXTRACT 2012-2015_0.csv"
+CSV_PATH = (
+    pathlib.Path(__file__).resolve().parent.parent
+    / "data" / "lpca" / "PURCHASE ORDER DATA EXTRACT 2012-2015_0.csv"
+)
 
 
 def load_data() -> None:
