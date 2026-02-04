@@ -13,13 +13,13 @@ import hashlib
 
 from pymongo import MongoClient
 
-from app.config import (
+from common.config import (
     COLLECTION_NAME,
     DB_NAME,
     MONGO_URI,
     TYPESENSE_COLLECTION,
 )
-from app.search import embed_text, get_typesense_client
+from clients.typesense import embed_text, get_typesense_client
 
 # Semantic fields — meaning-based vector search (user paraphrases concepts).
 SEMANTIC_FIELDS = [

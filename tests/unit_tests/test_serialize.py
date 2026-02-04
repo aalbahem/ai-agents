@@ -1,10 +1,10 @@
-"""Level 1: Unit tests for _serialize() from app/db.py."""
+"""Level 1: Unit tests for _serialize() from src/clients/mongodb.py."""
 
 from datetime import datetime
 
 from bson import ObjectId
 
-from app.db import _serialize
+from clients.mongodb import _serialize
 
 
 class TestSerializeObjectId:

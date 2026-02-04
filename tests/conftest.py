@@ -5,8 +5,8 @@ import os
 import pytest
 from pymongo import MongoClient
 
-from app.config import COLLECTION_NAME, DB_NAME, MONGO_URI
-from app.db import set_collection
+from common.config import COLLECTION_NAME, DB_NAME, MONGO_URI
+from clients.mongodb import set_collection
 
 
 @pytest.fixture(scope="session")

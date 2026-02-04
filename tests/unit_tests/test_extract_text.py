@@ -1,6 +1,6 @@
-"""Level 1: Unit tests for _extract_text() from app/agent.py."""
+"""Level 1: Unit tests for _extract_text() from src/agents/procurement.py."""
 
-from app.agent import _extract_text
+from agents.procurement import _extract_text
 
 
 class TestExtractTextPlainString:

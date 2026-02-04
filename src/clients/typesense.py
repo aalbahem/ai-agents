@@ -1,4 +1,3 @@
-
 """Typesense search for resolving user intent to exact field values.
 
 Two strategies:
@@ -6,7 +5,7 @@ Two strategies:
 - Text/fuzzy search for proper nouns (Supplier Name, Supplier Code, etc.)
 """
 
-from app.config import (
+from common.config import (
     TYPESENSE_API_KEY,
     TYPESENSE_COLLECTION,
     TYPESENSE_HOST,

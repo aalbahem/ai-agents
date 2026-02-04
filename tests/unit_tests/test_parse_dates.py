@@ -1,8 +1,8 @@
-"""Level 1: Unit tests for _parse_dates() from app/agent.py."""
+"""Level 1: Unit tests for _parse_dates() from src/tools/procurement.py."""
 
 from datetime import datetime
 
-from app.agent import _parse_dates
+from tools.procurement import _parse_dates
 
 
 class TestParseDatesISODatetime:

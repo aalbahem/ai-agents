@@ -7,7 +7,7 @@ from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
 
-from app.config import COLLECTION_NAME, DB_NAME, MONGO_URI
+from common.config import COLLECTION_NAME, DB_NAME, MONGO_URI
 
 _client: MongoClient | None = None
 _override_collection = None

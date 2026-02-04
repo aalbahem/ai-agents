@@ -15,7 +15,7 @@ import pathlib
 import pytest
 from langsmith import Client
 
-from app.agent import run_agent
+from agents.procurement import run_agent
 
 EVAL_FILE = pathlib.Path(__file__).resolve().parent.parent / "evaluation.json"
 EVAL_CASES = json.loads(EVAL_FILE.read_text())

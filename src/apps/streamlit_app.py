@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from app.agent import run_agent
+from agents.procurement import run_agent
 
 st.set_page_config(page_title="Procurement Assistant", page_icon="📊", layout="wide")
 st.title("AI Procurement Assistant")

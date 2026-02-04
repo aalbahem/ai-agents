@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from app.agent import run_agent
+from agents.procurement import run_agent
 from tests.helpers import make_mock_llm
 
 EVAL_FILE = pathlib.Path(__file__).resolve().parent.parent / "evaluation.json"
@@ -65,9 +65,9 @@ def test_tool_dispatch(case, mongo_collection):
 
     patches = {}
     if "find_similar_values" in names:
-        patches["app.agent.search_similar_values"] = _SEMANTIC_MOCK_RETURN
+        patches["tools.procurement.search_similar_values"] = _SEMANTIC_MOCK_RETURN
     if "find_supplier" in names:
-        patches["app.agent.search_fuzzy"] = _FUZZY_MOCK_RETURN
+        patches["tools.procurement.search_fuzzy"] = _FUZZY_MOCK_RETURN
 
     if patches:
         from contextlib import ExitStack
@@ -139,7 +139,7 @@ class TestFindSimilarValues:
     running, but exercises the full agent tool-dispatch path.
     """
 
-    @patch("app.agent.search_similar_values")
+    @patch("tools.procurement.search_similar_values")
     def test_tool_dispatches_and_returns_results(self, mock_search):
         """Verify the agent dispatches find_similar_values with the right args.
 
@@ -171,7 +171,7 @@ class TestFindSimilarValues:
             "Health Department", "Department Name", 5
         )
 
-    @patch("app.agent.search_similar_values")
+    @patch("tools.procurement.search_similar_values")
     def test_chained_with_mongodb_query(self, mock_search, mongo_collection):
         """Full two-step flow: resolve informal name, then query MongoDB.
 
@@ -224,7 +224,7 @@ class TestFindSupplier:
     Mocks the search backend but exercises the full agent tool-dispatch path.
     """
 
-    @patch("app.agent.search_fuzzy")
+    @patch("tools.procurement.search_fuzzy")
     def test_partial_supplier_name(self, mock_fuzzy):
         """Partial name 'Pitney' resolves to 'Pitney Bowes'."""
         mock_fuzzy.return_value = [
@@ -249,7 +249,7 @@ class TestFindSupplier:
         assert result == "The closest match is Pitney Bowes."
         mock_fuzzy.assert_called_once_with("Pitney", "Supplier Name", 5)
 
-    @patch("app.agent.search_fuzzy")
+    @patch("tools.procurement.search_fuzzy")
     def test_supplier_then_mongodb_query(self, mock_fuzzy, mongo_collection):
         """Two-step: resolve supplier name, then query MongoDB."""
         mock_fuzzy.return_value = [
@@ -286,7 +286,7 @@ class TestFindSupplier:
         assert result == "Pitney Bowes spent $123,456."
         assert mock_llm.call_count == 3
 
-    @patch("app.agent.search_fuzzy")
+    @patch("tools.procurement.search_fuzzy")
     def test_supplier_zip_code(self, mock_fuzzy):
         """Zip code lookup dispatches find_supplier with Supplier Zip Code."""
         mock_fuzzy.return_value = [
