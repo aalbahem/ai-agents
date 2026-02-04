@@ -6,13 +6,16 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 from app.config import (
     GEMINI_FALLBACK_MODELS,
     GEMINI_MODEL,
     GEMINI_TEMPERATURE,
     GOOGLE_API_KEY,
+    LLM_PROVIDER,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
 )
 from app.db import run_aggregate, run_distinct, run_find
 from app.search import search_fuzzy, search_similar_values
@@ -248,8 +251,9 @@ def find_supplier(query: str, field_name: str = "Supplier Name", limit: int = 5)
 TOOLS = [query_mongodb, aggregate_mongodb, get_distinct_values, find_similar_values, find_supplier]
 
 
-def build_agent():
-    """Build and return a LangChain tool-calling agent."""
+def _build_gemini():
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
     primary = ChatGoogleGenerativeAI(
         model=GEMINI_MODEL,
         temperature=GEMINI_TEMPERATURE,
@@ -264,8 +268,42 @@ def build_agent():
         for model in GEMINI_FALLBACK_MODELS
         if model != GEMINI_MODEL
     ]
-    llm = primary.with_fallbacks(fallbacks) if fallbacks else primary
-    return llm.bind_tools(TOOLS)
+    return primary.with_fallbacks(fallbacks) if fallbacks else primary
+
+
+def _build_openai():
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=OPENAI_MODEL,
+        temperature=GEMINI_TEMPERATURE,
+        api_key=OPENAI_API_KEY,
+    )
+
+
+def _build_ollama():
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=GEMINI_TEMPERATURE,
+    )
+
+
+_BUILDERS = {
+    "openai": _build_openai,
+    "gemini": _build_gemini,
+    "ollama": _build_ollama,
+}
+
+
+def build_agent():
+    """Build and return a LangChain tool-calling agent."""
+    builder = _BUILDERS.get(LLM_PROVIDER)
+    if builder is None:
+        raise ValueError(f"Unknown LLM_PROVIDER: {LLM_PROVIDER!r}. Choose from: {list(_BUILDERS)}")
+    return builder().bind_tools(TOOLS)
 
 
 def run_agent(user_input: str, history: list[dict], llm=None) -> str:
