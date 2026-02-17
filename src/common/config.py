@@ -12,6 +12,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "procurement")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "purchases")
+VIEW_NAME = os.getenv("VIEW_NAME", "purchase_orders")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0"))
 

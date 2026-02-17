@@ -7,15 +7,21 @@ from typing import Any
 from bson import ObjectId
 from pymongo import MongoClient
 
-from common.config import COLLECTION_NAME, DB_NAME, MONGO_URI
+from common.config import COLLECTION_NAME, DB_NAME, MONGO_URI, VIEW_NAME
 
 _client: MongoClient | None = None
 _override_collection = None
+_override_view = None
 
 
 def set_collection(collection):
     global _override_collection
     _override_collection = collection
+
+
+def set_view(view):
+    global _override_view
+    _override_view = view
 
 
 def _get_collection():
@@ -25,6 +31,15 @@ def _get_collection():
     if _client is None:
         _client = MongoClient(MONGO_URI)
     return _client[DB_NAME][COLLECTION_NAME]
+
+
+def _get_view():
+    if _override_view is not None:
+        return _override_view
+    global _client
+    if _client is None:
+        _client = MongoClient(MONGO_URI)
+    return _client[DB_NAME][VIEW_NAME]
 
 
 def _serialize(doc: dict) -> dict:
@@ -60,6 +75,13 @@ def run_aggregate(pipeline: list[dict[str, Any]]) -> str:
     """Execute an aggregation pipeline and return results as JSON string."""
     col = _get_collection()
     results = [_serialize(doc) for doc in col.aggregate(pipeline)]
+    return json.dumps(results, default=str)
+
+
+def run_aggregate_view(pipeline: list[dict[str, Any]]) -> str:
+    """Execute an aggregation pipeline on the purchase_orders view."""
+    view = _get_view()
+    results = [_serialize(doc) for doc in view.aggregate(pipeline)]
     return json.dumps(results, default=str)
 
 

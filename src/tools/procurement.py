@@ -6,7 +6,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from clients.mongodb import run_aggregate, run_distinct, run_find
+from clients.mongodb import run_aggregate, run_aggregate_view, run_distinct, run_find
 from clients.typesense import search_fuzzy, search_similar_values
 
 
@@ -70,6 +70,31 @@ def aggregate_mongodb(pipeline: str) -> str:
     """
     parsed = _parse_dates(json.loads(pipeline))
     return run_aggregate(parsed)
+
+
+@tool
+def aggregate_mongodb_view(pipeline: str) -> str:
+    """Run a MongoDB aggregation pipeline on the purchase_orders view (order-level data).
+
+    Each row in this view represents ONE unique purchase order (not a line item).
+    Use this for order-level questions: counting orders, orders per department,
+    orders per supplier, etc.
+
+    Available fields: Department Name, Purchase Order Number, Fiscal Year,
+    Creation Date, Purchase Date, Supplier Name, Supplier Code,
+    Acquisition Type, Acquisition Method, CalCard, LPA Number,
+    total_line_items (count of items in the order), total_spent (sum of line-item prices).
+
+    Args:
+        pipeline: JSON string of the aggregation pipeline (a list of stage objects).
+                  For date queries within $match stages, use ISO strings like "2013-01-01T00:00:00".
+                  Example: '[{"$match": {"Fiscal Year": "2013-2014"}}, {"$count": "total"}]'
+
+    Returns:
+        JSON string of aggregation results.
+    """
+    parsed = _parse_dates(json.loads(pipeline))
+    return run_aggregate_view(parsed)
 
 
 @tool

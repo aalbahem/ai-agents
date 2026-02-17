@@ -40,7 +40,7 @@ def _build_langsmith_examples(tags=None):
             "metadata": {"id": case["id"], "tags": case["tags"]},
         }
         for case in cases
-        if case["expected_values"]  # skip cases with no expected values
+        if case.get("expected_values")  # skip cases with no expected values
     ]
 
 
