@@ -1,12 +1,12 @@
 [
   {
     "id": "count-orders-2013",
-    "tags": ["aggregation", "date-filter", "count"],
-    "question": "How many orders were created in 2013?",
-    "expected_values": ["115309"],
+    "tags": ["aggregation", "date-filter", "count", "order-grain"],
+    "_comment": "Tests that the agent counts distinct purchase orders (via the view), not raw line items. The raw collection has 115,309 line items for 2013, but the actual number of distinct orders is lower.",
+    "question": "How many purchase orders were created in 2013?",
     "tool_calls": [
       {
-        "name": "aggregate_mongodb",
+        "name": "aggregate_mongodb_view",
         "args": {
           "pipeline": "[{\"$match\": {\"Creation Date\": {\"$gte\": \"2013-01-01T00:00:00\", \"$lt\": \"2014-01-01T00:00:00\"}}}, {\"$count\": \"total\"}]"
         }
@@ -46,14 +46,15 @@
   },
   {
     "id": "top5-suppliers-by-count",
-    "tags": ["aggregation", "group-by", "top-n"],
+    "tags": ["aggregation", "group-by", "top-n", "order-grain"],
+    "_comment": "Counts orders per supplier using the view (one row per order), not line items.",
     "question": "Top 5 suppliers by order count",
-    "expected_values": ["Voyager Fleet Systems"],
+    "expected_values": ["Prison Industry Authority"],
     "tool_calls": [
       {
-        "name": "aggregate_mongodb",
+        "name": "aggregate_mongodb_view",
         "args": {
-          "pipeline": "[{\"$group\": {\"_id\": \"$Supplier Name\", \"count\": {\"$sum\": 1}}}, {\"$sort\": {\"count\": -1}}, {\"$limit\": 5}]"
+          "pipeline": "[{\"$group\": {\"_id\": \"$Supplier Name\", \"order_count\": {\"$sum\": 1}}}, {\"$sort\": {\"order_count\": -1}}, {\"$limit\": 5}]"
         }
       }
     ]
